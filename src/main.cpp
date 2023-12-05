@@ -4,7 +4,9 @@
 #include <Audio.h>
 #include <ESP32Encoder.h>
 #include <ezButton.h>
+#include <ArduinoJson.h>
 #include "RadioStateMachine.h"
+#include "RestClient.h"
 #include "streams.h"
 #include "config.h"
 #include "FreeSansBold10pt7b.h"
@@ -23,7 +25,7 @@ Arduino_ILI9341 display = Arduino_ILI9341(&bus, TFT_RESET);
 Audio audio;
 ESP32Encoder encoder;
 ezButton button(SW_PIN);
-int streamIndex = 0;
+int streamIndex = 3;
 State_t state = STATE_INIT;
 int lastPosition = 0;
 bool buttonPressed = false;
@@ -32,6 +34,7 @@ RadioState *S0;
 RadioState *S1;
 RadioState *S2;
 RadioState *S3;
+RestClient albumArtRestClient = RestClient("musicbrainz.org", 443);
 
 int checkEncoder()
 {
@@ -179,7 +182,7 @@ void setup()
 
   // Initialize the display
   display.begin();
-  display.setRotation(1);
+  display.setRotation(3);
   display.fillScreen(WHITE);
   display.setFont(&FreeSansBold10pt7b);
   display.setTextColor(BLACK);
@@ -241,4 +244,68 @@ void loop()
 {
   button.loop();
   machine.run();
+}
+
+// musicbrainz.org/ws/2/recording/?query=artist:Kait%20Dunton+recording:Auld%20Lang%20Syne
+
+//**************************************************************************************************
+//                                           E V E N T S                                           *
+//**************************************************************************************************
+void audio_info(const char *info)
+{
+  Serial.print("audio_info: ");
+  Serial.println(info);
+  if (strstr(info, "StreamTitle="))
+  {
+    // Remove StreamTitle: and the preceeding '
+    char *sinfo = (char *)(info + 13);
+    // Remove trailing '
+    sinfo[strlen(sinfo) - 1] = 0;
+
+    // Now we need the artist and song
+    char *artist = strtok(sinfo, "-");
+    char *song = strtok(NULL, "-");
+    // Remove trailing space from artist
+    artist[strlen(artist) - 1] = 0;
+    // Remove leading space from song
+    song++;
+
+    Serial.print("StreamTitle Artist :");
+    Serial.println(artist);
+    Serial.print("StreamTitle Song :");
+    Serial.println(song);
+    audio_showstation(info + 10);
+
+    // construct the url
+    char *url = (char *)malloc(strlen(artist) + strlen(song) + 100);
+    sprintf(url, "/ws/2/recording/?query=artist:%s+recording:%s", artist, song);
+    albumArtRestClient.setContentType("application/json");
+    int status = albumArtRestClient.get(url);
+
+    int statusCode = albumArtRestClient.get(url);
+    if (statusCode == 200)
+    {
+      DynamicJsonDocument doc(1024);
+      deserializeJson(doc, albumArtRestClient.getResponseBody());
+      Serial.print("Got: ");
+      Serial.println(doc["metadata"]["recording-list"][0]["title"].as<String>());
+    }
+  }
+}
+void audio_showstation(const char *info)
+{
+  Serial.print("Station Name:");
+  Serial.println(String(info));
+}
+void audio_showstreamtitle(const char *info)
+{
+  String sinfo = String(info);
+  sinfo.replace("|", "\n");
+  Serial.println(sinfo);
+}
+
+void audio_id3data(const char *info)
+{
+  Serial.print("ID3 Data: ");
+  Serial.println(String(info));
 }
