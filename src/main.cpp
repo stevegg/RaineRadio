@@ -4,7 +4,7 @@
 #include <Audio.h>
 #include <ESP32Encoder.h>
 #include <ezButton.h>
-#include <StateMachine.h>
+#include "RadioStateMachine.h"
 #include "streams.h"
 #include "config.h"
 #include "FreeSansBold10pt7b.h"
@@ -27,11 +27,11 @@ int streamIndex = 0;
 State_t state = STATE_INIT;
 int lastPosition = 0;
 bool buttonPressed = false;
-StateMachine machine = StateMachine();
-State *S0;
-State *S1;
-State *S2;
-State *S3;
+RadioStateMachine machine = RadioStateMachine();
+RadioState *S0;
+RadioState *S1;
+RadioState *S2;
+RadioState *S3;
 
 int checkEncoder()
 {
@@ -48,6 +48,42 @@ int checkEncoder()
   }
   // Return 0 for no change
   return 0;
+}
+
+void updateDisplay(int newState)
+{
+  Serial.print("Update display :");
+  Serial.println(newState);
+  if (newState == 0)
+  {
+    display.fillScreen(WHITE);
+    display.setCursor(10, 20);
+    display.println("Connecting to Wifi...");
+  }
+  else if (newState == 1)
+  {
+    display.fillScreen(WHITE);
+    display.setCursor(10, 20);
+    display.println("Connecting to stream...");
+    display.setCursor(10, 40);
+    display.println(streams[streamIndex].name);
+  }
+  else if (newState == 2)
+  {
+    display.fillScreen(WHITE);
+    display.setCursor(10, 20);
+    display.println("Playing...");
+    display.setCursor(10, 40);
+    display.println(streams[streamIndex].name);
+  }
+  else if (newState == 3)
+  {
+    display.fillRect(0, 0, 320, 60, WHITE);
+    display.setCursor(10, 20);
+    display.println("Configuring...");
+    display.setCursor(10, 40);
+    display.println(streams[streamIndex].name);
+  }
 }
 
 // Forward declarations of state functions
@@ -85,7 +121,6 @@ void connectingStreamState()
   {
     Serial.print("Connecting to stream :");
     Serial.println(streams[streamIndex].name);
-    // updateDisplay();
     audio.setPinout(MAX98357A_I2S_BCLK, MAX98357A_I2S_LRC, MAX98357A_I2S_DOUT);
     audio.setVolume(100);
     audio.connecttohost(streams[streamIndex].url);
@@ -132,12 +167,15 @@ void configuringState()
   {
     Serial.print("Stream: ");
     Serial.println(streams[streamIndex].name);
-    // updateDisplay();
+    updateDisplay(3);
   }
 }
 
 void setup()
 {
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("Initializing display...");
 
   // Initialize the display
   display.begin();
@@ -147,7 +185,9 @@ void setup()
   display.setTextColor(BLACK);
   display.setCursor(10, 20);
   display.println("Setting things up...");
-  // updateDisplay();
+  updateDisplay(0);
+
+  Serial.println("Setting up encoder...");
 
   // Enable the weak pull up resistors
   ESP32Encoder::useInternalWeakPullResistors = UP;
@@ -159,9 +199,8 @@ void setup()
   // set starting count value after attaching
   encoder.clearCount();
 
-  Serial.begin(115200);
-  delay(1000);
-
+  Serial.println("Setting up State Machine...");
+  machine.setTransitionCallback(updateDisplay);
   S0 = machine.addState(&connectingWifiState);
   S1 = machine.addState(&connectingStreamState);
   S2 = machine.addState(&playingState);
