@@ -1,3 +1,6 @@
+#ifndef __CONFIG_H
+#define __CONFIG_H
+
 // Encoder
 #define CLK_PIN 15 // ESP32 pin GPIO15 connected to the rotary encoder's CLK pin
 #define DT_PIN 32  // 2   // ESP32 pin GPIO2 connected to the rotary encoder's DT pin
@@ -18,6 +21,11 @@
 #define MAX98357A_I2S_DOUT 25
 #define MAX98357A_I2S_BCLK 27
 #define MAX98357A_I2S_LRC 26
+#define VOLUME_INPUT 39
 
-const char *ssid = "GIoT";
-const char *password = "IC7610B4by!";
+#define SSID "GIoT"
+#define PASSWORD "IC7610B4by!"
+
+#define DEBUGLOG_DEFAULT_LOG_LEVEL_DEBUG
+
+#endif

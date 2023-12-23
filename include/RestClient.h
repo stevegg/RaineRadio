@@ -3,32 +3,35 @@
 
 #include <Arduino.h>
 #include <HTTPClient.h>
+#include "wifiFix.h"
 
 class RestClient
 {
 public:
-   RestClient(const char *host, const int port);
+   RestClient();
    ~RestClient();
 
-   int get(String path);
-   String getResponseBody();
+   void reset();
+   int get(const char *path);
+   const char *getResponseBody();
+   char getNextResponseBodyChar();
 
    void setHeader(const char *headerName, const char *headerValue);
    void setContentType(const char *contentTypeValue);
+   WiFiClient &getStream();
+   void close();
 
 private:
-   int request(const char *method, String path, String body);
-   int request(const char *method, String path);
-   String urlencode(String originalText);
+   int request(const char *url);
+   char *urlencode(const char *original);
 
-   int port;
    int num_headers;
-   const char *host;
    const char *headerNames[10];
    const char *headerValues[10];
    const char *contentType;
    HTTPClient *httpClient;
    int statusCode;
+   WiFiClientFixed *wifi;
 };
 
 #endif

@@ -1,0 +1,2 @@
+GET http://musicbrainz.org/ws/2/recording/?query=artist:Doug%20Munro%20&%20La%20Pompe%20Attack+recording:Winter%20Wonderland&fmt=json
+```

@@ -1,0 +1,104 @@
+#include <Arduino.h>
+#include <Arduino_GFX_Library.h>
+#include <TJpg_Decoder.h>
+#include <SPI.h>
+#include <Wire.h>
+#include <SD.h>
+#include <SD_MMC.h>
+#include <SPIFFS.h>
+#include <FFat.h>
+#include "RestClient.h"
+#include "AlbumArt.h"
+#include "config.h"
+
+#include <DebugLog.h>
+
+#define LINE_LENGTH 16
+
+// const char *url = "/ws/2/recording/?query=artist:Anton%20Schwartz+recording:Swamp%20Thing";
+const char *streamTitle = "StreamTitle='Anton Schwartz - Swamp Thing'";
+
+Arduino_ESP32SPI bus = Arduino_ESP32SPI(TFT_DC, TFT_CS, TFT_SCK, TFT_MOSI, TFT_MISO);
+Arduino_ILI9341 tft = Arduino_ILI9341(&bus, TFT_RESET);
+
+// This next function will be called during decoding of the jpeg file to
+// render each block to the TFT.  If you use a different TFT library
+// you will need to adapt this function to suit.
+bool tft_output(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t *bitmap)
+{
+   // Stop further decoding as image is running off bottom of screen
+   if (y >= tft.height())
+      return 0;
+
+   tft.draw16bitRGBBitmap(x, y, bitmap, w, h);
+
+   // Return 1 to decode next block
+   return 1;
+}
+
+void setup()
+{
+   tft.begin();
+   tft.fillScreen(BLACK);
+
+   Serial.begin(115200);
+   // // The jpeg image can be scaled by a factor of 1, 2, 4, or 8
+   TJpgDec.setJpgScale(1);
+
+   // // The decoder must be given the exact name of the rendering function above
+   TJpgDec.setCallback(tft_output);
+
+   long startTime = millis();
+   int myCount = 0;
+   LOG_INFO("Connecting to Wifi :", SSID);
+
+   WiFi.mode(WIFI_STA); // Optional
+   WiFi.begin(SSID, PASSWORD);
+   while (WiFi.status() != WL_CONNECTED && myCount < 31)
+   {
+      yield();
+      if (millis() - startTime > 500)
+      {
+         Serial.print(".");
+         startTime = millis();
+         myCount++;
+         if (myCount > 30)
+         {
+            ESP.restart();
+         }
+      }
+   }
+   uint8_t *jpgImage = NULL;
+   int bytes = getImageForStreamTitle(streamTitle, &jpgImage);
+   LOG_INFO("Image bytes :", bytes);
+   int index = 0;
+   while (index < bytes)
+   {
+      int count = bytes - index;
+      if (count > LINE_LENGTH)
+      {
+         count = LINE_LENGTH;
+      }
+      for (int i = 0; i < count; i++)
+      {
+         Serial.print(jpgImage[index + count], HEX);
+         Serial.print(" ");
+      }
+      Serial.println();
+      index += count;
+   }
+
+   uint16_t w = 0, h = 0;
+   TJpgDec.getJpgSize(&w, &h, jpgImage, sizeof(jpgImage));
+   LOG_INFO("Image Width ", w);
+   LOG_INFO("Image Height ", h);
+   // Draw the image, top left at 0,0
+   TJpgDec.drawJpg(0, 0, jpgImage, sizeof(jpgImage));
+
+   free(jpgImage);
+}
+
+void loop()
+{
+   delay(1000);
+}
